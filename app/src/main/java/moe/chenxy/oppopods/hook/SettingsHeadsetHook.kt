@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import moe.chenxy.oppopods.BuildConfig
+import moe.chenxy.oppopods.pods.PodDeviceMatcher
 import moe.chenxy.oppopods.utils.miuiStrongToast.data.BatteryParams
 import moe.chenxy.oppopods.utils.miuiStrongToast.data.OppoPodsAction
 import moe.chenxy.oppopods.utils.miuiStrongToast.data.PodParams
@@ -491,7 +492,7 @@ object SettingsHeadsetHook : HookContext() {
         val address = runCatching { device.address }.getOrNull()
         if (address != null && isOppoAddress(address)) return true
         val name = runCatching { device.name ?: device.alias }.getOrNull().orEmpty()
-        val result = name.contains("oppo", ignoreCase = true)
+        val result = PodDeviceMatcher.matches(context, name)
         if (result && address != null) {
             knownOppoAddresses.add(address.uppercase())
             currentAddress = address

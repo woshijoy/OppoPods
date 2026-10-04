@@ -19,7 +19,7 @@
 </div>
 
 
-为小米 HyperOS 设备提供系统级 OPPO 耳机控制的 Xposed 模块。
+为小米 HyperOS 设备提供系统级 OPPO / 一加 / realme 耳机控制的 Xposed 模块。三者使用同一套欢律（HeyMelody）协议，机型能力按内置官方机型表识别。
 
 
 ### 耳机功能
@@ -50,7 +50,7 @@
 1. 安装 APK
 2. 在 LSPosed 中启用模块并勾选推荐作用域
 3. 软件右上角一键重启作用域
-4. 通过蓝牙连接你的 OPPO 耳机
+4. 通过蓝牙连接你的 OPPO / 一加 / realme 耳机
 
 ### OPPO LE Audio（LC3）
 

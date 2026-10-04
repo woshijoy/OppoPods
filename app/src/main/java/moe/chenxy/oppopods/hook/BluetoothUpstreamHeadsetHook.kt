@@ -14,6 +14,7 @@ import android.os.Parcel
 import java.lang.reflect.Method
 import moe.chenxy.oppopods.BuildConfig
 import moe.chenxy.oppopods.config.ConfigManager
+import moe.chenxy.oppopods.pods.PodDeviceMatcher
 import moe.chenxy.oppopods.pods.RfcommController
 import moe.chenxy.oppopods.utils.miuiStrongToast.data.BatteryParams
 import moe.chenxy.oppopods.utils.miuiStrongToast.data.OppoPodsAction
@@ -610,7 +611,7 @@ class BluetoothUpstreamHeadsetHook : HookContext() {
         if (device == null) return false
         val address = runCatching { device.address }.getOrNull()
         val name = runCatching { device.name ?: device.alias }.getOrNull().orEmpty()
-        val result = name.contains("oppo", ignoreCase = true) || (address != null && isOppoAddress(address))
+        val result = PodDeviceMatcher.matches(context, name) || (address != null && isOppoAddress(address))
         if (result && address != null) knownOppoAddresses.add(address.uppercase())
         return result
     }

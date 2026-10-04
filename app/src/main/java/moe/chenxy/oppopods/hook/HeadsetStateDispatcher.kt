@@ -11,12 +11,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Handler
 import moe.chenxy.oppopods.BuildConfig
+import moe.chenxy.oppopods.pods.PodDeviceMatcher
 import moe.chenxy.oppopods.pods.RfcommController
 import moe.chenxy.oppopods.utils.SystemApisUtils.setIconVisibility
 import moe.chenxy.oppopods.utils.miuiStrongToast.data.OppoPodsAction
 
 object HeadsetStateDispatcher : HookContext() {
     private var appRequestReceiverRegistered = false
+    private var appContext: Context? = null
 
     override fun onHook() {
         runCatching {
@@ -36,10 +38,10 @@ object HeadsetStateDispatcher : HookContext() {
                 return@hookAfter
             }
             handler.post {
-                Log.d("OppoPods", "A2DP Connection State: $currState, isOppoPod ${isOppoPod(device)}")
                 val context = instance as ContextWrapper
                 registerAppRequestReceiver(context)
-                if (!isOppoPod(device)) return@post
+                Log.d("OppoPods", "A2DP Connection State: $currState, isOppoPod ${isOppoPod(context, device)}")
+                if (!isOppoPod(context, device)) return@post
 
                 val statusBarManager = context.getSystemService("statusbar") as StatusBarManager
                 if (currState == BluetoothHeadset.STATE_CONNECTED) {
@@ -55,6 +57,7 @@ object HeadsetStateDispatcher : HookContext() {
 
     private fun registerAppRequestReceiver(context: Context?) {
         if (context == null || appRequestReceiverRegistered) return
+        appContext = context
         context.registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (context == null) return
@@ -88,11 +91,12 @@ object HeadsetStateDispatcher : HookContext() {
     }
 
     /**
-     * Detect OPPO earphones by checking if the device name contains "oppo" (case insensitive).
+     * Detect BBK-family earbuds (OPPO / OnePlus / realme, Enco models) via [PodDeviceMatcher],
+     * falling back to the context captured when the receiver was registered.
      */
     @SuppressLint("MissingPermission")
-    fun isOppoPod(device: BluetoothDevice): Boolean {
-        val name = device.name ?: return false
-        return name.contains("oppo", ignoreCase = true)
+    fun isOppoPod(context: Context?, device: BluetoothDevice): Boolean {
+        val name = runCatching { device.name ?: device.alias }.getOrNull() ?: return false
+        return PodDeviceMatcher.matches(context ?: appContext, name)
     }
 }

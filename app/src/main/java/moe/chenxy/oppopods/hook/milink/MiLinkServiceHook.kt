@@ -18,6 +18,7 @@ import moe.chenxy.oppopods.hook.Log
 import moe.chenxy.oppopods.hook.callMethod
 import moe.chenxy.oppopods.hook.getObjectField
 import moe.chenxy.oppopods.hook.setObjectField
+import moe.chenxy.oppopods.pods.PodDeviceMatcher
 import moe.chenxy.oppopods.pods.RfcommController
 import moe.chenxy.oppopods.pods.detectDeviceCapabilities
 import moe.chenxy.oppopods.utils.miuiStrongToast.data.BatteryParams
@@ -253,7 +254,7 @@ object MiLinkServiceHook : HookContext() {
         val address = runCatching { device.address }.getOrNull()
         if (address != null && isOppoAddress(address)) return true
         val name = runCatching { device.name ?: device.alias }.getOrNull().orEmpty()
-        val result = name.contains("oppo", ignoreCase = true)
+        val result = PodDeviceMatcher.matches(context, name)
         if (result && address != null) {
             knownOppoAddresses.add(address.uppercase())
             currentAddress = address

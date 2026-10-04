@@ -4,7 +4,7 @@
 
 # OPPOPods
 
-**System-level OPPO earphone control for HyperOS devices**
+**System-level OPPO / OnePlus / realme earphone control for HyperOS devices**
 
 [![GitHub Release](https://img.shields.io/github/v/release/1812z/OppoPods?style=flat-square&logo=github&color=black)](https://github.com/1812z/OppoPods/releases)
 ![Downloads](https://img.shields.io/github/downloads/1812z/OppoPods/total?style=flat-square)
@@ -18,7 +18,7 @@
 </div>
 
 
-An Xposed module that provides system-level OPPO earphone control for Xiaomi HyperOS devices.
+An Xposed module that provides system-level OPPO / OnePlus / realme earphone control for Xiaomi HyperOS devices. All three brands share the same HeyMelody protocol, and model capabilities are resolved from the bundled official model table.
 
 
 ### Earphone Features
@@ -49,7 +49,7 @@ An Xposed module that provides system-level OPPO earphone control for Xiaomi Hyp
 1. Install the APK
 2. Enable the module in LSPosed and select the recommended scopes
 3. Use the one-tap scope restart button in the top-right corner of the app
-4. Connect your OPPO earphones via Bluetooth
+4. Connect your OPPO / OnePlus / realme earphones via Bluetooth
 
 ### OPPO LE Audio (LC3)
 

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.core.content.ContextCompat
 import moe.chenxy.oppopods.R
+import moe.chenxy.oppopods.pods.PodDeviceMatcher
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
@@ -139,7 +140,7 @@ fun DevicePickerPage(
     val bluetoothEnabled = adapter?.isEnabled == true
     val pairedDevices = remember(hasPermission, bluetoothEnabled, bluetoothRefreshToken) {
         if (!bluetoothEnabled) emptyList() else adapter?.bondedDevices?.toList()?.sortedByDescending {
-            it.name?.contains("oppo", ignoreCase = true) == true
+            PodDeviceMatcher.matchesName(it.name)
         } ?: emptyList()
     }
 

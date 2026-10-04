@@ -11,6 +11,11 @@ object DeviceModelRegistry {
     private const val EQ_MODE_NAMES_ASSET_NAME = "eq_mode_names.json"
     private const val EQ_MODE_NAMES_EN_ASSET_NAME = "eq_mode_names.en.json"
 
+    /** Device class used by the official table; "S" marks speakers instead of earbuds. */
+    private const val TYPE_SPEAKER = "S"
+
+    enum class ModelKind { UNKNOWN, POD, NON_POD }
+
     @Volatile
     private var entries: List<JSONObject> = emptyList()
 
@@ -69,6 +74,23 @@ object DeviceModelRegistry {
             if (fallback == null) fallback = entry
         }
         return fallback?.let(::parse)
+    }
+
+    /**
+     * Classifies [deviceName] against the bundled official model table using the same exact
+     * (normalized) name match as [byDeviceName]. Unlisted names stay [ModelKind.UNKNOWN].
+     */
+    fun modelKind(context: Context, deviceName: String?): ModelKind {
+        ensureLoaded(context)
+        val target = normalize(deviceName.orEmpty())
+        if (target.isEmpty()) return ModelKind.UNKNOWN
+        var hasNonPod = false
+        for (entry in entries) {
+            if (normalize(entry.optString("name")) != target) continue
+            if (entry.optString("type") != TYPE_SPEAKER) return ModelKind.POD
+            hasNonPod = true
+        }
+        return if (hasNonPod) ModelKind.NON_POD else ModelKind.UNKNOWN
     }
 
     private fun parse(entry: JSONObject): ModelCapabilities {
