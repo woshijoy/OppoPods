@@ -1200,6 +1200,9 @@ object RfcommController {
         }
     }
 
+    /** True while a pod session is established or being (re)established. */
+    fun hasActiveSession(): Boolean = isConnected || reconnectPending || connectionJob?.isActive == true
+
     /**
      * Combo query strategy: send batch query (wake + game mode), then battery, then ANC.
      */
