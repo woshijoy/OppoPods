@@ -5,6 +5,7 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -49,6 +50,7 @@ import moe.chenxy.oppopods.config.PodImagePrefs
 import moe.chenxy.oppopods.config.PodImageResource
 import moe.chenxy.oppopods.pods.NoiseControlMode
 import moe.chenxy.oppopods.pods.EqDevicePreset
+import moe.chenxy.oppopods.pods.PodDeviceMatcher
 import moe.chenxy.oppopods.pods.WearState
 import moe.chenxy.oppopods.pods.WearStatus
 import moe.chenxy.oppopods.pods.detectDeviceCapabilities
@@ -141,6 +143,10 @@ fun MainUI(
     var pendingOpenEarphonesAfterPickerLoaded by remember { mutableStateOf(false) }
     var lastBluetoothServiceAliveMs by remember { mutableStateOf(0L) }
     var bluetoothServiceResponsive by remember { mutableStateOf(false) }
+    var lastAclConnectedEventMs by remember { mutableStateOf(0L) }
+    var autoConnectAttemptCount by remember { mutableStateOf(0) }
+    var lastAutoConnectAddress by remember { mutableStateOf<String?>(null) }
+    var lastAutoConnectAttemptMs by remember { mutableStateOf(0L) }
     val backgroundColor = appBackground()
     val overlayBottomBar = floatingBottomBar.value || blurBottomBar.value
     val pageBottomContentPadding = if (overlayBottomBar) 104.dp else 28.dp
@@ -347,6 +353,15 @@ fun MainUI(
                         bluetoothServiceResponsive = true
                     }
 
+                    BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                        val device = p1.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                            ?: return
+                        val name = runCatching { device.name ?: device.alias }.getOrNull()
+                        if (!PodDeviceMatcher.matches(context, name)) return
+                        autoConnectAttemptCount = 0
+                        lastAclConnectedEventMs = SystemClock.elapsedRealtime()
+                    }
+
                     BluetoothAdapter.ACTION_STATE_CHANGED,
                     BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
                         bluetoothState = readBluetoothState(context)
@@ -378,6 +393,7 @@ fun MainUI(
             addAction(OppoPodsAction.ACTION_MODULE_BLUETOOTH_SERVICE_ALIVE)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
         }, Context.RECEIVER_EXPORTED)
 
         sendBluetoothModuleBroadcast(context, OppoPodsAction.ACTION_PODS_UI_INIT)
@@ -482,6 +498,40 @@ fun MainUI(
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
             context.sendBroadcast(this)
         }
+    }
+
+    /**
+     * App-side auto-connect: replays the manual connect flow once the module service is reachable
+     * and a matching bud is actually linked to the phone, so the user does not have to pick the
+     * device by hand. Works with any hook build that already accepts connect requests.
+     */
+    fun tryAutoConnect(reason: String) {
+        if (hookConnected.value || connectingDeviceAddress != null) return
+        if (hookConnectionState == "connecting") return
+        if (connectedDeviceAddress.isNotBlank()) return
+        if (showConnectErrorDialog) return
+        val device = findConnectedPodDevice(context) ?: return
+        val now = SystemClock.elapsedRealtime()
+        val sameDevice = device.address == lastAutoConnectAddress
+        if (sameDevice) {
+            if (autoConnectAttemptCount >= AUTO_CONNECT_MAX_ATTEMPTS) return
+            if (now - lastAutoConnectAttemptMs < AUTO_CONNECT_COOLDOWN_MS) return
+        }
+        autoConnectAttemptCount = if (sameDevice) autoConnectAttemptCount + 1 else 1
+        lastAutoConnectAddress = device.address
+        lastAutoConnectAttemptMs = now
+        Log.i(
+            "OppoPods",
+            "auto-connect ($reason): ${device.name}/${device.address} attempt=$autoConnectAttemptCount"
+        )
+        onDeviceSelected(device)
+    }
+
+    LaunchedEffect(lastBluetoothServiceAliveMs, lastAclConnectedEventMs) {
+        val aclIsLatest = lastAclConnectedEventMs > lastBluetoothServiceAliveMs
+        if (!aclIsLatest && lastBluetoothServiceAliveMs <= 0L) return@LaunchedEffect
+        delay(if (aclIsLatest) 2_000L else 1_500L)
+        tryAutoConnect(if (aclIsLatest) "ACL connected" else "bluetooth service alive")
     }
 
     fun setSpatialAudioMode(mode: Int) {
@@ -1015,6 +1065,42 @@ private fun readBluetoothState(context: Context): BluetoothSummary {
             bondedCount = adapter?.bondedDevices?.size ?: 0,
         )
     }.getOrDefault(BluetoothSummary(enabled = false, bondedCount = 0))
+}
+
+private const val AUTO_CONNECT_COOLDOWN_MS = 30_000L
+private const val AUTO_CONNECT_MAX_ATTEMPTS = 3
+
+/** Profiles that mean the bud is linked to the phone; 22 is the hidden BluetoothProfile.LE_AUDIO id. */
+private val POD_CONNECTED_PROFILES = intArrayOf(
+    BluetoothProfile.A2DP,
+    BluetoothProfile.HEADSET,
+    BluetoothProfile.GATT,
+    22,
+)
+
+/**
+ * Returns a bonded BBK-family bud that is currently connected to the phone.
+ *
+ * Only public Bluetooth APIs are used: hidden-API reflection (BluetoothDevice#isConnected) is
+ * not available inside a regular app process, so each audio profile is asked instead.
+ */
+@SuppressLint("MissingPermission")
+private fun findConnectedPodDevice(context: Context): BluetoothDevice? {
+    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager ?: return null
+    val adapter = manager.adapter ?: return null
+    if (adapter.isEnabled != true) return null
+    val bonded = runCatching { adapter.bondedDevices.orEmpty().map { it.address }.toSet() }
+        .getOrDefault(emptySet())
+    if (bonded.isEmpty()) return null
+    for (profile in POD_CONNECTED_PROFILES) {
+        val connected = runCatching { manager.getConnectedDevices(profile) }.getOrNull() ?: continue
+        for (device in connected) {
+            if (device.address !in bonded) continue
+            val name = runCatching { device.name ?: device.alias }.getOrNull()
+            if (PodDeviceMatcher.matches(context, name)) return device
+        }
+    }
+    return null
 }
 
 private fun wearStateFromExtra(value: Int): WearState? {
