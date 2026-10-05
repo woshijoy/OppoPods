@@ -31,7 +31,10 @@ object PodImageLoader {
         val moduleContext = runCatching {
             context.createPackageContext(MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY)
         }.getOrNull() ?: return null
-        return BitmapFactory.decodeResource(moduleContext.resources, fallbackResId)
+        return BitmapFactory.decodeResource(
+            moduleContext.resources,
+            resolveFallbackId(moduleContext, resource, fallbackResId),
+        )
     }
 
     fun loadBitmapWithCustomFallback(
@@ -55,7 +58,28 @@ object PodImageLoader {
         val moduleContext = runCatching {
             context.createPackageContext(MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY)
         }.getOrNull() ?: return null
-        return BitmapFactory.decodeResource(moduleContext.resources, fallbackResId)
+        return BitmapFactory.decodeResource(
+            moduleContext.resources,
+            resolveFallbackId(moduleContext, resource, fallbackResId),
+        )
+    }
+
+    private fun fallbackResName(resource: PodImageResource): String = when (resource) {
+        PodImageResource.BOX -> "img_box"
+        PodImageResource.LEFT -> "img_left"
+        PodImageResource.RIGHT -> "img_right"
+    }
+
+    /**
+     * Resolve the fallback drawable by name: the Bluetooth process may still run hook code from a
+     * previous APK build while the installed resource ids were renumbered, so a compiled id can
+     * point at an unrelated drawable.
+     */
+    private fun resolveFallbackId(moduleContext: Context, resource: PodImageResource, fallbackResId: Int): Int {
+        val id = runCatching {
+            moduleContext.resources.getIdentifier(fallbackResName(resource), "drawable", MODULE_PACKAGE)
+        }.getOrDefault(0)
+        return if (id != 0) id else fallbackResId
     }
 
     fun loadBoxBitmap(context: Context, prefs: SharedPreferences, address: String): Bitmap? {

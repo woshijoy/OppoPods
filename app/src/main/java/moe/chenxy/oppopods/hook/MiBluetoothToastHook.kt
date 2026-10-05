@@ -115,7 +115,10 @@ object MiBluetoothToastHook : HookContext() {
                     "moe.chenxy.oppopods", Context.CONTEXT_IGNORE_SECURITY
                 )
                 val headsetBitmap = PodImageLoader.loadBoxBitmap(context, prefs, address)
-                    ?: BitmapFactory.decodeResource(moduleContext.resources, R.drawable.img_box)
+                    ?: BitmapFactory.decodeResource(
+                        moduleContext.resources,
+                        moduleDrawableId(moduleContext, "img_box", R.drawable.img_box),
+                    )
                 if (headsetBitmap == null) {
                     Log.e("OppoPods", "createPodsNotification: headset bitmap null")
                     return
@@ -171,7 +174,7 @@ object MiBluetoothToastHook : HookContext() {
 
                     textButton {
                         addActionInfo {
-                            val ancLabel = moduleContext.getString(R.string.cycle_anc)
+                            val ancLabel = moduleString(moduleContext, "cycle_anc", R.string.cycle_anc, "切换降噪")
                             val ancAction = Notification.Action.Builder(
                                 Icon.createWithResource(context, android.R.drawable.ic_lock_silent_mode),
                                 ancLabel,
@@ -181,7 +184,12 @@ object MiBluetoothToastHook : HookContext() {
                             actionTitle = ancLabel
                         }
                         addActionInfo {
-                            val disconnectLabel = moduleContext.getString(R.string.notification_btn_disconnect)
+                            val disconnectLabel = moduleString(
+                                moduleContext,
+                                "notification_btn_disconnect",
+                                R.string.notification_btn_disconnect,
+                                "断开连接",
+                            )
                             val disconnectIntent = Intent("com.android.bluetooth.headset.notification").apply {
                                 putExtra("btData", bundle)
                                 putExtra("disconnect", "1")
@@ -358,6 +366,30 @@ object MiBluetoothToastHook : HookContext() {
     }
 
     private fun Int.floorMod(divisor: Int): Int = ((this % divisor) + divisor) % divisor
+
+    private const val MODULE_PACKAGE = "moe.chenxy.oppopods"
+
+    /**
+     * Resolve module strings by name instead of the compiled R id. The Bluetooth process can keep
+     * running hook code from a previous APK build while the installed resources have been
+     * renumbered, in which case numeric ids point at unrelated entries (the "断开连接" button once
+     * showed the LE-Audio summary text that way).
+     */
+    private fun moduleString(context: Context, name: String, fallbackResId: Int, fallback: String): String {
+        val byName = runCatching {
+            val id = context.resources.getIdentifier(name, "string", MODULE_PACKAGE)
+            if (id != 0) context.getString(id) else null
+        }.getOrNull()
+        if (byName != null) return byName
+        return runCatching { context.getString(fallbackResId) }.getOrDefault(fallback)
+    }
+
+    /** Looks a module drawable up by name for the same reason as [moduleString]. */
+    private fun moduleDrawableId(context: Context, name: String, fallbackResId: Int): Int {
+        val id = runCatching { context.resources.getIdentifier(name, "drawable", MODULE_PACKAGE) }
+            .getOrDefault(0)
+        return if (id != 0) id else fallbackResId
+    }
 
     private fun batteryShape(battery: BatteryParams): Triple<Boolean, Boolean, Boolean> = Triple(
         battery.left?.isConnected == true,

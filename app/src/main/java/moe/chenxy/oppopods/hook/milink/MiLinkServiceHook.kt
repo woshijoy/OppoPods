@@ -533,9 +533,15 @@ object MiLinkServiceHook : HookContext() {
     private fun loadGameModeIcon(view: View): Drawable? {
         gameModeIcon?.let { return it }
         return runCatching {
-            view.context.createPackageContext(BuildConfig.APPLICATION_ID, Context.CONTEXT_IGNORE_SECURITY)
-                .getDrawable(R.drawable.ic_game_mode)
-                ?.also { gameModeIcon = it }
+            val moduleContext = view.context.createPackageContext(
+                BuildConfig.APPLICATION_ID,
+                Context.CONTEXT_IGNORE_SECURITY,
+            )
+            // Resolve by name: compiled R ids go stale while the Bluetooth process keeps an old
+            // hook build alive across an APK update.
+            val id = moduleContext.resources.getIdentifier("ic_game_mode", "drawable", BuildConfig.APPLICATION_ID)
+                .takeIf { it != 0 } ?: R.drawable.ic_game_mode
+            moduleContext.getDrawable(id)?.also { gameModeIcon = it }
         }.getOrNull()
     }
 
